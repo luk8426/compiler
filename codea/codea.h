@@ -1,11 +1,19 @@
 #ifndef CODE_H_
 #define CODE_H_
 
-#define ADD 1
-#define REG 2
-#define NUM 3
-#define ASSIGN 4
-#define ADDASSIGN 5
+typedef enum { 
+	NODE_NUM, 
+	NODE_PARAM,
+	NODE_ADD,
+	NODE_SUB,
+	NODE_MUL,
+	NODE_AND,
+	NODE_NOT,
+	NODE_GT,
+	NODE_EQ,
+	NODE_ARRAY 
+} NodeType;
+
 
 #ifdef USE_IBURG
 #ifndef BURM
@@ -16,12 +24,11 @@ typedef struct burm_state *STATEPTR_TYPE;
 #endif
 
 typedef struct s_node {
-	int		op;
+	NodeType type;
 	struct s_node   *kids[2];
 	STATEPTR_TYPE	state;
-        /* user defined data fields follow here */
-	char*		regname;
-	int		val;
+	int param_reg_idx;
+	long val;
 } treenode;
 
 typedef treenode *treenodep;
@@ -32,5 +39,8 @@ typedef treenode *treenodep;
 #define RIGHT_CHILD(p)	((p)->kids[1])
 #define STATE_LABEL(p)	((p)->state)
 #define PANIC		printf
+
+const char* param_regs[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
+const char* caller_safe_regs[] = {"%rax", "%r10", "%r11"};
 
 #endif
