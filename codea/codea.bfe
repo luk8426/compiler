@@ -1,0 +1,34 @@
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
+
+#include "codea.h"
+
+%}
+
+%start reg
+%term ADD=1 REG=2 NUM=3 ASSIGN=4 ADDASSIGN=5
+
+%%
+
+reg:	ASSIGN(reg,reg)     # 1 # printf("movq %s, %s\n",kids[1]->regname, kids[0]->regname);
+reg:	ASSIGN(reg,num)     # 1 # printf("movq $%d, %s\n",kids[1]->val,kids[0]->regname);
+reg:	ADDASSIGN(reg,reg)  # 1 # printf("addq %s, %s\n",kids[1]->regname,kids[0]->regname);
+reg:	ADDASSIGN(reg,num)  # 1 # printf("addq $%d, %s\n",kids[1]->val,kids[0]->regname);
+num:	ADD(num,num)	    # 0 # bnode->val=kids[0]->val + kids[1]->val; 
+
+reg:	REG		    # 0
+num:	NUM		    # 0
+
+%%
+				
+extern treenode *root;
+extern int yyparse(void);
+void burm_reduce(NODEPTR_TYPE bnode, int goalnt);
+
+void invoke_burm(NODEPTR_TYPE root) {
+	burm_label(root);
+	burm_reduce(root, 1);
+}
+
