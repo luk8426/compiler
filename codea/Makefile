@@ -1,31 +1,38 @@
-CC = gcc
-CFLAGS = -Wall -g
-TARGET = ag
-
-SRC_Y = parser.y
-SRC_LEX = scanner.l
-
-OX_Y = oxout.y
-OX_L = oxout.l
-
-BISON_C = oxout.tab.c
-BISON_H = oxout.tab.h
-LEX_C = lex.yy.c
-
-OBJS = oxout.tab.o lex.yy.o
-
-all: $(TARGET)
-
-$(TARGET): $(SRC_Y) $(SRC_LEX)
-        ox $(SRC_Y) $(SRC_LEX)
-        bison -d $(OX_Y)
-        flex $(OX_L)
-        $(CC) $(CFLAGS) -c $(BISON_C)
-        $(CC) $(CFLAGS) -c $(LEX_C)
-        $(CC) $(CFLAGS) -o $(TARGET) $(OBJS) -lfl
+all: codea
 
 clean:
-        rm -f $(TARGET)
-        rm -f $(OX_Y) $(OX_L)
-        rm -f $(BISON_C) $(BISON_H) $(LEX_C)
         rm -f *.o
+        rm -f lex.yy.c
+        rm -f codea.brg codea.c
+        rm -f codea
+        rm -f oxout*
+
+codea: oxout.tab.o lex.yy.o codea.o
+        cc -o codea y.tab.o lex.yy.o codea.o -lfl
+
+oxout.tab.c oxout.tab.h: oxout.y
+        bison -d oxout.y
+
+oxout.y: parser.y scanner.l
+        ox parser.y scanner.l
+
+oxout.l: parser.y scanner.l
+        ox parser.y scanner.l
+
+lex.yy.c: oxout.l
+        flex oxout.l
+
+oxout.tab.o: oxout.tab.c codea.h
+        cc -c oxout.tab.c
+
+yy.lex.o: lex.yy.c oxout.tab.h codea.h
+        cc -c lex.yy.c
+
+codea.brg: codea.bfe
+        bfe codea.bfe >codea.brg
+
+codea.c: codea.brg
+        iburg codea.brg >codea.c
+
+codea.o: codea.c codea.h
+        gcc -c codea.c

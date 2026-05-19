@@ -5,16 +5,18 @@
 
 #include "codea.h"
 
+extern const char* reg_names[];
+
 %}
 
 %start reg
 
-%term NODE_NUM=0 NODE_PARAM=1 NODE_ADD=2 NODE_SUB=3 NODE_MUL=4 NODE_AND=5 NODE_NOT=6 NODE_GT=7 NODE_EQ=8 NODE_ARRAY=9
+%term NODE_NUM=0 NODE_VAR=1 NODE_ADD=2 NODE_SUB=3 NODE_MUL=4 NODE_AND=5 NODE_NOT=6 NODE_GT=7 NODE_EQ=8 NODE_ARRAY=9
 
 %%
 
 num:    NODE_NUM		  	  # 0 #
-reg:    NODE_PARAM			  # 0 #
+reg:    NODE_VAR			  # 0 #
 
 num:	NODE_ADD(num,num)	  # 0 # bnode->val=kids[0]->val + kids[1]->val; 
 reg:	NODE_ADD(reg,reg)     # 1 # {bnode->reg_idx=kids[0]->reg_idx; printf("  addq %s, %s\n", reg_names[kids[1]->reg_idx], reg_names[kids[0]->reg_idx]);};

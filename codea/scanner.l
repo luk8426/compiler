@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "oxout.tab.h"
 #include <string.h>
+#include "codea.h"
 
 long parse_number(const char *text, int base) {
     char buf[256];

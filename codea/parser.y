@@ -24,7 +24,7 @@ struct Symbol* create_st() {
     return NULL;
 }
 
-struct Symbol* insert_symbol(struct Symbol* s, const char* name, SymType type, int index) {
+struct Symbol* insert_symbol(struct Symbol* s, const char* name, SymType type) {
     struct Symbol* curr = s;
     while (curr) {
         if (strcmp(curr->name, name) == 0) {
@@ -38,7 +38,6 @@ struct Symbol* insert_symbol(struct Symbol* s, const char* name, SymType type, i
     struct Symbol* new_sym = malloc(sizeof(struct Symbol));
     new_sym->name = strdup(name);
     new_sym->type = type;
-    new_sym->index = index;
     new_sym->next = s;
     return new_sym;
 }
@@ -46,7 +45,7 @@ struct Symbol* insert_symbol(struct Symbol* s, const char* name, SymType type, i
 int lookup_symbol(struct Symbol* s, const char* name, SymType type) {
     struct Symbol* curr = s;
     while (curr) {
-        if (strcmp(curr->name, name) == 0 && curr->type == type) return curr->index;
+        if (strcmp(curr->name, name) == 0 && curr->type == type) return 1;
         curr = curr->next;
     }
     
@@ -56,10 +55,12 @@ int lookup_symbol(struct Symbol* s, const char* name, SymType type) {
 }
 
 int lookup_index(struct Symbol* s, const char* name) {
-    return lookup_symbol(s, name, TYPE_VAR)
+    return lookup_symbol(s, name, TYPE_VAR);
 }
 
 // --------- End symbol table functions ---------
+
+const char* reg_names[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%rax", "%r10", "%r11"};
 
 %}
 
@@ -73,13 +74,13 @@ int lookup_index(struct Symbol* s, const char* name) {
 @attributes { char* name; } ID
 
 @attributes { int reg_idx; struct Symbol* st_in; struct Symbol* st_syn; } Pars
-@attributes { char* func_name; struct Symbol* st_in; struct Symbol* st_syn; } Stats Stat
+@attributes { struct Symbol* st_in; struct Symbol* st_syn; } Stats Stat
 
-@attributes { struct Symbol* st_in; } 
-    Expr Args AddList MulList AndList GuardedList Conds Term Lexpr Guarded
+@attributes { struct Symbol* st_in; } Args GuardedList Conds Lexpr Guarded
 
-@attributes { treenode *tree; } Expr Term
-@attributes { treenode* tree_in; treenode* tree_syn; } AddList MulList AndList
+@attributes { treenode *tree; struct Symbol* st_in;} Expr Term
+
+@attributes { treenode* tree_in; treenode* tree_syn; struct Symbol* st_in;} AddList MulList AndList
 @attributes { int count; } NotList
 @attributes { NodeType op; } LEM
 
@@ -104,7 +105,6 @@ Program: /* Can also be empty bc {} says 0 or multiple times  */
 Funcdef: ID '(' Pars ')' Stats END  /* Function definition */
         @{
             @i @Pars.reg_idx@ = 0;
-            @i @Stats.func_name@ = @ID.name@;
             @i @Pars.st_in@ = create_st();
             @i @Stats.st_in@ = @Pars.st_syn@;
         @}
@@ -113,12 +113,12 @@ Funcdef: ID '(' Pars ')' Stats END  /* Function definition */
 Pars: /* Can also be empty */
         @{  @i @Pars.st_syn@ = @Pars.st_in@; @} // unchanged if empty
     | ID     /* Parameter definition */
-        @{  @i @Pars.st_syn@ = insert_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR, @Pars.reg_idx@); @}
+        @{  @i @Pars.st_syn@ = insert_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR); @}
     | ID ',' Pars
         @{  
             @i @Pars.1.reg_idx@ = @Pars.0.reg_idx@ + 1;
             @i @Pars.1.st_in@ = @Pars.0.st_in@;
-            @i @Pars.0.st_syn@ = insert_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR, @Pars.1.reg_idx@);
+            @i @Pars.0.st_syn@ = insert_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR);
         @}
     ;
 
@@ -127,9 +127,7 @@ Stats: /* Can also be empty */
     | Stats Stat ';'
         @{
             @i @Stats.1.st_in@ = @Stats.0.st_in@;
-            @i @Stats.1.func_name@ = @Stats.0.func_name@;
             @i @Stat.st_in@ = @Stats.1.st_syn@;
-            @i @Stat.func_name@ = @Stats.0.func_name@;
             @i @Stats.0.st_syn@ = @Stat.st_syn@;
         @}
     ;
@@ -223,7 +221,7 @@ Expr: Term
         @{ 
             @i @Term.st_in@ = @Expr.0.st_in@; 
             @i @Expr.1.st_in@ = @Expr.0.st_in@;
-            @i @Expr.0.tree@ = create_node(NODE_ARRAY, @Term.tree@, @Expr.1.tree@) 
+            @i @Expr.0.tree@ = create_node(NODE_ARRAY, @Term.tree@, @Expr.1.tree@);
         @} 
     | Term AddList      
         @{ 

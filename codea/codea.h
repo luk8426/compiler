@@ -1,9 +1,9 @@
-#ifndef CODE_H_
-#define CODE_H_
+#ifndef CODEA_H_
+#define CODEA_H_
 
 typedef enum { 
 	NODE_NUM, 
-	NODE_PARAM,
+	NODE_VAR,
 	NODE_ADD,
 	NODE_SUB,
 	NODE_MUL,
@@ -14,14 +14,7 @@ typedef enum {
 	NODE_ARRAY 
 } NodeType;
 
-
-#ifdef USE_IBURG
-#ifndef BURM
 typedef struct burm_state *STATEPTR_TYPE;
-#endif
-#else
-#define STATEPTR_TYPE int
-#endif
 
 typedef struct s_node {
 	NodeType type;
@@ -34,12 +27,10 @@ typedef struct s_node {
 typedef treenode *treenodep;
 
 #define NODEPTR_TYPE	treenodep
-#define OP_LABEL(p)	((p)->op)
+#define OP_LABEL(p)	((p)->type)
 #define LEFT_CHILD(p)	((p)->kids[0])
 #define RIGHT_CHILD(p)	((p)->kids[1])
 #define STATE_LABEL(p)	((p)->state)
 #define PANIC		printf
-
-const char* reg_names[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%rax", "%r10", "%r11"};
 
 #endif
