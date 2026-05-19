@@ -24,7 +24,7 @@ struct Symbol* create_st() {
     return NULL;
 }
 
-struct Symbol* insert_symbol(struct Symbol* s, const char* name, SymType type) {
+struct Symbol* insert_param_symbol(struct Symbol* s, const char* name, SymType type, int index) {
     struct Symbol* curr = s;
     while (curr) {
         if (strcmp(curr->name, name) == 0) {
@@ -38,14 +38,19 @@ struct Symbol* insert_symbol(struct Symbol* s, const char* name, SymType type) {
     struct Symbol* new_sym = malloc(sizeof(struct Symbol));
     new_sym->name = strdup(name);
     new_sym->type = type;
+    new_sym->index = index;
     new_sym->next = s;
     return new_sym;
+}
+
+struct Symbol* insert_symbol(struct Symbol* s, const char* name, SymType type) {
+    return insert_param_symbol(s, name, type, -1);
 }
 
 int lookup_symbol(struct Symbol* s, const char* name, SymType type) {
     struct Symbol* curr = s;
     while (curr) {
-        if (strcmp(curr->name, name) == 0 && curr->type == type) return 1;
+        if (strcmp(curr->name, name) == 0 && curr->type == type) return curr->index;
         curr = curr->next;
     }
     
@@ -113,12 +118,12 @@ Funcdef: ID '(' Pars ')' Stats END  /* Function definition */
 Pars: /* Can also be empty */
         @{  @i @Pars.st_syn@ = @Pars.st_in@; @} // unchanged if empty
     | ID     /* Parameter definition */
-        @{  @i @Pars.st_syn@ = insert_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR); @}
+        @{  @i @Pars.st_syn@ = insert_param_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR, @Pars.reg_idx@); @}
     | ID ',' Pars
         @{  
             @i @Pars.1.reg_idx@ = @Pars.0.reg_idx@ + 1;
             @i @Pars.1.st_in@ = @Pars.0.st_in@;
-            @i @Pars.0.st_syn@ = insert_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR);
+            @i @Pars.0.st_syn@ = insert_param_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR, @Pars.0.reg_idx@);
         @}
     ;
 
@@ -215,7 +220,7 @@ Expr: Term
     | NOT NotList Term
         @{ 
             @i @Term.st_in@ = @Expr.st_in@; 
-            @i @Expr.tree@ = (@NotList.count@%2==0) ? @Term.tree@ : create_node(NODE_NOT, @Term.tree@, NULL);
+            @i @Expr.tree@ = (@NotList.count@%2==0) ? create_node(NODE_NOT, @Term.tree@, NULL) : @Term.tree@;
         @}
     | Term '[' Expr ']' /* Reading from array */
         @{ 
@@ -339,7 +344,7 @@ treenode *create_node(NodeType ntype, treenode *left, treenode *right)
   newNode->type = ntype;
   newNode->kids[0] = left;
   newNode->kids[1] = right;
-  newNode->reg_idx = 0;
+  newNode->reg_idx = -1;
   newNode->val = 0;
 
   return newNode;
@@ -348,7 +353,7 @@ treenode *create_node(NodeType ntype, treenode *left, treenode *right)
 treenode *create_var_node(int idx)
 {
   treenode *newNode = create_node(NODE_VAR,NULL,NULL);
-  newNode->reg_idx = idx;
+  newNode->reg_idx = idx; // -1 if var is no parameter
   return newNode;
 }
 
