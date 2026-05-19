@@ -27,7 +27,7 @@ typedef struct s_node {
 	NodeType type;
 	struct s_node   *kids[2];
 	STATEPTR_TYPE	state;
-	int param_reg_idx;
+	int reg_idx;
 	long val;
 } treenode;
 
@@ -40,7 +40,6 @@ typedef treenode *treenodep;
 #define STATE_LABEL(p)	((p)->state)
 #define PANIC		printf
 
-const char* param_regs[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
-const char* caller_safe_regs[] = {"%rax", "%r10", "%r11"};
+const char* reg_names[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%rax", "%r10", "%r11"};
 
 #endif

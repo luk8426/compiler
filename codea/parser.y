@@ -55,7 +55,7 @@ int lookup_symbol(struct Symbol* s, const char* name, SymType type) {
     return 0;
 }
 
-int lookup_param_index(struct Symbol* s, const char* name) {
+int lookup_index(struct Symbol* s, const char* name) {
     return lookup_symbol(s, name, TYPE_VAR)
 }
 
@@ -72,13 +72,13 @@ int lookup_param_index(struct Symbol* s, const char* name) {
 @attributes { long val; } NUM
 @attributes { char* name; } ID
 
-@attributes { int param_idx; struct Symbol* st_in; struct Symbol* st_syn; } Pars
+@attributes { int reg_idx; struct Symbol* st_in; struct Symbol* st_syn; } Pars
 @attributes { char* func_name; struct Symbol* st_in; struct Symbol* st_syn; } Stats Stat
 
 @attributes { struct Symbol* st_in; } 
     Expr Args AddList MulList AndList GuardedList Conds Term Lexpr Guarded
 
-@attributes { treenode *n; } Expr Term
+@attributes { treenode *tree; } Expr Term
 @attributes { treenode* tree_in; treenode* tree_syn; } AddList MulList AndList
 @attributes { int count; } NotList
 @attributes { NodeType op; } LEM
@@ -89,9 +89,9 @@ int lookup_param_index(struct Symbol* s, const char* name) {
 @traversal @preorder codegen
 
 %{
-treenode *new_node(NodeType ntype, treenode *left, treenode *right);
-treenode *new_var_node(int idx);
-treenode *new_num_node(long num);
+treenode *create_node(NodeType ntype, treenode *left, treenode *right);
+treenode *create_var_node(int idx);
+treenode *create_num_node(long num);
 extern void invoke_burm(NODEPTR_TYPE root);
 %}
 
@@ -103,8 +103,7 @@ Program: /* Can also be empty bc {} says 0 or multiple times  */
 
 Funcdef: ID '(' Pars ')' Stats END  /* Function definition */
         @{
-            @codegen invoke_burm(@stmt.n@); ??????????
-            @i @Pars.param_idx@ = 0;
+            @i @Pars.reg_idx@ = 0;
             @i @Stats.func_name@ = @ID.name@;
             @i @Pars.st_in@ = create_st();
             @i @Stats.st_in@ = @Pars.st_syn@;
@@ -114,12 +113,12 @@ Funcdef: ID '(' Pars ')' Stats END  /* Function definition */
 Pars: /* Can also be empty */
         @{  @i @Pars.st_syn@ = @Pars.st_in@; @} // unchanged if empty
     | ID     /* Parameter definition */
-        @{  @i @Pars.st_syn@ = insert_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR, @Pars.param_idx@); @}
+        @{  @i @Pars.st_syn@ = insert_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR, @Pars.reg_idx@); @}
     | ID ',' Pars
         @{  
-            @i @Pars.1.param_idx@ = @Pars.0.param_idx@ + 1;
+            @i @Pars.1.reg_idx@ = @Pars.0.reg_idx@ + 1;
             @i @Pars.1.st_in@ = @Pars.0.st_in@;
-            @i @Pars.0.st_syn@ = insert_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR, @Pars.1.param_idx@);
+            @i @Pars.0.st_syn@ = insert_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR, @Pars.1.reg_idx@);
         @}
     ;
 
@@ -137,6 +136,7 @@ Stats: /* Can also be empty */
 
 Stat: RETURN Expr
         @{
+            @codegen invoke_burm(@Expr.tree@);
             @i @Stat.st_syn@ = @Stat.st_in@;
             @i @Expr.st_in@ = @Stat.st_in@;
         @}
@@ -314,7 +314,7 @@ Term: '(' Expr ')'
     | ID Dummy          /* variable usage */
         @{ 
             @m Dummy.res ; lookup_symbol(@Term.st_in@, @ID.name@, TYPE_VAR); 
-            @i @Term.tree@ = create_param_node(lookup_param_index(@Term.st_in@, @ID.name@));
+            @i @Term.tree@ = create_var_node(lookup_index(@Term.st_in@, @ID.name@));
         @}         
     | ID '(' Args ')'   /* Function call */  
         @{ 
@@ -332,7 +332,7 @@ Dummy: /* Empty */ ; /* Dummy dependent for lookup_symbol */
 
 %%
 
-treenode *new_node(NodeType ntype, treenode *left, treenode *right)
+treenode *create_node(NodeType ntype, treenode *left, treenode *right)
 {
   treenode *newNode = malloc(sizeof(treenode));
 
@@ -341,22 +341,22 @@ treenode *new_node(NodeType ntype, treenode *left, treenode *right)
   newNode->type = ntype;
   newNode->kids[0] = left;
   newNode->kids[1] = right;
-  newNode->param_reg_idx = 0;
+  newNode->reg_idx = 0;
   newNode->val = 0;
 
   return newNode;
 }
 
-treenode *new_var_node(int idx)
+treenode *create_var_node(int idx)
 {
-  treenode *newNode = new_node(NODE_VAR,NULL,NULL);
-  newNode->param_reg_idx = idx;
+  treenode *newNode = create_node(NODE_VAR,NULL,NULL);
+  newNode->reg_idx = idx;
   return newNode;
 }
 
-treenode *new_num_node(long num)
+treenode *create_num_node(long num)
 {
-  treenode *newNode = new_node(NODE_NUM,NULL,NULL);
+  treenode *newNode = create_node(NODE_NUM,NULL,NULL);
   newNode->val = num;
   return newNode;
 }

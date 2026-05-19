@@ -13,14 +13,27 @@
 
 %%
 
-reg:	ASSIGN(reg,reg)     # 1 # printf("movq %s, %s\n",kids[1]->regname, kids[0]->regname);
-reg:	ASSIGN(reg,num)     # 1 # printf("movq $%d, %s\n",kids[1]->val,kids[0]->regname);
-reg:	ADDASSIGN(reg,reg)  # 1 # printf("addq %s, %s\n",kids[1]->regname,kids[0]->regname);
-reg:	ADDASSIGN(reg,num)  # 1 # printf("addq $%d, %s\n",kids[1]->val,kids[0]->regname);
-num:	ADD(num,num)	    # 0 # bnode->val=kids[0]->val + kids[1]->val; 
+num:    NODE_NUM		  	  # 0 #
+reg:    NODE_PARAM			  # 0 #
 
-reg:	REG		    # 0
-num:	NUM		    # 0
+num:	NODE_ADD(num,num)	  # 0 # bnode->val=kids[0]->val + kids[1]->val; 
+reg:	NODE_ADD(reg,reg)     # 1 # {bnode->reg_idx=kids[0]->reg_idx; printf("  addq %s, %s\n", reg_names[kids[1]->reg_idx], reg_names[kids[0]->reg_idx]);};
+reg:	NODE_ADD(reg,num)     # 1 # {bnode->reg_idx=kids[0]->reg_idx; printf("  addq $%d, %s\n", kids[1]->val, reg_names[kids[0]->reg_idx]);};
+reg:	NODE_ADD(num,reg)     # 1 # {bnode->reg_idx=kids[1]->reg_idx; printf("  addq $%d, %s\n", kids[0]->val, reg_names[kids[1]->reg_idx]);};
+
+num:	NODE_SUB(num,num)	  # 0 # bnode->val=kids[0]->val - kids[1]->val; 
+reg:	NODE_SUB(reg,reg)     # 1 # printf("  subq %s, %s\n", reg_names[kids[1]->reg_idx], reg_names[kids[0]->reg_idx]);
+
+reg:	NODE_MUL(reg,reg)     # 1 # printf("  imulq %s, %s\n", reg_names[kids[1]->reg_idx], reg_names[kids[0]->reg_idx]);
+
+reg:	NODE_AND(reg,reg)     # 1 # printf("  andq %s, %s\n", reg_names[kids[1]->reg_idx], reg_names[kids[0]->reg_idx]);
+reg:	NODE_NOT(reg)     	  # 1 # printf("  notq %s\n", reg_names[kids[0]->reg_idx]);
+
+reg:	NODE_GT				  # 5 #
+reg:	NODE_EQ				  # 5 #	
+
+reg:	NODE_ARRAY(reg, reg)  # 5 # printf("  movq (%s,%s,8), %s\n", reg_names[0], reg_names[1], reg_names[0]);
+
 
 %%
 				
