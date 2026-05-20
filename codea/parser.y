@@ -108,11 +108,12 @@ Program: /* Can also be empty bc {} says 0 or multiple times  */
     | Program Funcdef ';' 
     ;
 
-Funcdef: ID '(' Pars ')' Stats END  /* Function definition */
+Funcdef: ID '(' Pars ')' Stats END Dummy /* Function definition */
         @{
             @i @Pars.reg_idx@ = 0;
             @i @Pars.st_in@ = create_st();
             @i @Stats.st_in@ = @Pars.st_syn@;
+            @m Dummy.res ; {printf(".global %s\n", @ID.name@);printf("%s:\n", @ID.name@);};
         @}
     ;
 
