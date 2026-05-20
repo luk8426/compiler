@@ -25,8 +25,10 @@ void free_reg() { last_free_reg++;}
 
 %%
 
-expr: 	reg						# 0 #	{if (kids[0]->reg_idx != 6) {printf("\tmovq %s, %%rax\n", reg_names[kids[0]->reg_idx]);}printf("\tret\n");free_reg();} ;
-num:    NODE_NUM		  	  	# 0 #
+expr: 	reg						# 0 #	{if (kids[0]->reg_idx != 6) {printf("\tmovq %s, %%rax\n", reg_names[kids[0]->reg_idx]);}printf("\tret\n");free_reg();};
+expr:	num						# 0 #	{printf("\tmovq $%d, %%rax\n", kids[0]->val);printf("\tret\n");};
+
+num:    NODE_NUM		  	  	# 0 #	
 reg:    NODE_VAR			  	# 0 # 	{int r = new_reg(); printf("\tmovq %s, %s\n", reg_names[bnode->reg_idx], reg_names[r]);bnode->reg_idx = r;};
 
 num:	NODE_ADD(num,num)	  	# 0 # 	{bnode->val=kids[0]->val + kids[1]->val;};
