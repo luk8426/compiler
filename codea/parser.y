@@ -66,6 +66,7 @@ int lookup_index(struct Symbol* s, const char* name) {
 // --------- End symbol table functions ---------
 
 const char* reg_names[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%rax", "%r10", "%r11"};
+const char* reg8b_names[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b", "%al", "%r10b", "%r11b"};
 
 %}
 
