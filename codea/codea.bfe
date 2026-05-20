@@ -36,7 +36,7 @@ reg:	NODE_ADD(reg,reg)     	# 1 # 	{bnode->reg_idx=kids[0]->reg_idx; printf("\ta
 
 num:	NODE_SUB(num,num)	  	# 0 # 	{bnode->val=kids[0]->val - kids[1]->val;};
 reg:	NODE_SUB(reg,num)     	# 1 # 	{bnode->reg_idx=kids[0]->reg_idx; printf("\tsubq $%d, %s\n", kids[1]->val, reg_names[kids[0]->reg_idx]);};
-reg:	NODE_SUB(num,reg)     	# 1 # 	{bnode->reg_idx=kids[1]->reg_idx; printf("\taddq $%d, %s\n", -1*kids[0]->val, reg_names[kids[1]->reg_idx]);};
+reg:	NODE_SUB(num,reg)     	# 1 # 	{bnode->reg_idx=kids[1]->reg_idx; printf("\tnegq %s\n", reg_names[kids[1]->reg_idx]);printf("\taddq $%d, %s\n", kids[0]->val, reg_names[kids[1]->reg_idx]);};
 reg:	NODE_SUB(reg,reg)     	# 1 # 	{bnode->reg_idx=kids[0]->reg_idx; printf("\tsubq %s, %s\n", reg_names[kids[1]->reg_idx], reg_names[kids[0]->reg_idx]);free_reg();};
 
 num:	NODE_MUL(num,num)	  	# 0 # 	{bnode->val=kids[0]->val * kids[1]->val;};
@@ -53,9 +53,9 @@ num: 	NODE_NOT(num)			# 0 # 	{bnode->val=~(kids[0]->val);};
 reg:	NODE_NOT(reg)     	  	# 1 # 	{bnode->reg_idx=kids[0]->reg_idx; printf("\tnotq %s\n", reg_names[kids[0]->reg_idx]);};
 
 num:	NODE_GT(num, num)		# 0 #	{bnode->val=(kids[0]->val >= kids[1]->val);};
-reg:	NODE_GT(reg, num)		# 3 #	{bnode->reg_idx=kids[0]->reg_idx; printf("\tcmpq $%d, %s\n", kids[1]->val, reg_names[kids[0]->reg_idx]);printf("\tsetge %s\n", reg8b_names[kids[0]->reg_idx]); printf("\tmovzbq %s, %s\n", reg8b_names[kids[0]->reg_idx], reg_names[kids[0]->reg_idx]);};
-reg:	NODE_GT(num, reg)		# 3 #	{bnode->reg_idx=kids[1]->reg_idx; printf("\tcmpq $%d, %s\n", kids[0]->val, reg_names[kids[1]->reg_idx]);printf("\tsetle %s\n", reg8b_names[kids[1]->reg_idx]); printf("\tmovzbq %s, %s\n", reg8b_names[kids[1]->reg_idx], reg_names[kids[1]->reg_idx]);};
-reg:	NODE_GT(reg, reg)		# 3 #	{bnode->reg_idx=kids[0]->reg_idx; printf("\tcmpq %s, %s\n", reg_names[kids[1]->reg_idx], reg_names[kids[0]->reg_idx]);printf("\tsetge %s\n", reg8b_names[kids[0]->reg_idx]); printf("\tmovzbq %s, %s\n", reg8b_names[kids[0]->reg_idx], reg_names[kids[0]->reg_idx]);free_reg();};
+reg:	NODE_GT(reg, num)		# 3 #	{bnode->reg_idx=kids[0]->reg_idx; printf("\tcmpq $%d, %s\n", kids[1]->val, reg_names[kids[0]->reg_idx]);printf("\tsetg %s\n", reg8b_names[kids[0]->reg_idx]); printf("\tmovzbq %s, %s\n", reg8b_names[kids[0]->reg_idx], reg_names[kids[0]->reg_idx]);};
+reg:	NODE_GT(num, reg)		# 3 #	{bnode->reg_idx=kids[1]->reg_idx; printf("\tcmpq $%d, %s\n", kids[0]->val, reg_names[kids[1]->reg_idx]);printf("\tsetl %s\n", reg8b_names[kids[1]->reg_idx]); printf("\tmovzbq %s, %s\n", reg8b_names[kids[1]->reg_idx], reg_names[kids[1]->reg_idx]);};
+reg:	NODE_GT(reg, reg)		# 3 #	{bnode->reg_idx=kids[0]->reg_idx; printf("\tcmpq %s, %s\n", reg_names[kids[1]->reg_idx], reg_names[kids[0]->reg_idx]);printf("\tsetg %s\n", reg8b_names[kids[0]->reg_idx]); printf("\tmovzbq %s, %s\n", reg8b_names[kids[0]->reg_idx], reg_names[kids[0]->reg_idx]);free_reg();};
 
 num:	NODE_EQ(num, num)		# 0 #	{bnode->val=(kids[0]->val == kids[1]->val);};
 reg:	NODE_EQ(reg, num)		# 3 #	{bnode->reg_idx=kids[0]->reg_idx; printf("\tcmpq $%d, %s\n", kids[1]->val, reg_names[kids[0]->reg_idx]);printf("\tsete %s\n", reg8b_names[kids[0]->reg_idx]); printf("\tmovzbq %s, %s\n", reg8b_names[kids[0]->reg_idx], reg_names[kids[0]->reg_idx]);};
