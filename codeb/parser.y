@@ -18,8 +18,8 @@ struct Symbol {
     char *name;
     SymType type;
     int offset; 
-    // char *label_start;  // Für Labels (continue) TBD
-    // char *label_end;    // Für Labels (break) TBD
+    char *label_start; 
+    char *label_end;
     struct Symbol *next;
 };
 
@@ -30,7 +30,7 @@ struct Symbol* create_st() {
 struct Symbol* insert_var_symbol(struct Symbol* s, const char* name, SymType type, int offset) {
     struct Symbol* curr = s;
     while (curr) {
-        if (strcmp(curr->name, name) == 0) {
+        if (strcmp(curr->name, name) == 0 && curr->type == TYPE_VAR) {
             // Error, sym already exists!
             fprintf(stderr, "Error: Duplicate name '%s'\n", name);
             exit(NAME_SCOPE_ERROR);
@@ -42,8 +42,8 @@ struct Symbol* insert_var_symbol(struct Symbol* s, const char* name, SymType typ
     new_sym->name = strdup(name);
     new_sym->type = type;
     new_sym->offset = offset;
-    // new_sym->label_start = NULL;
-    // new_sym->label_end = NULL;    
+    new_sym->label_start = NULL;
+    new_sym->label_end = NULL;    
     new_sym->next = s;
     return new_sym;
 }
@@ -52,20 +52,57 @@ struct Symbol* insert_symbol(struct Symbol* s, const char* name, SymType type) {
     return insert_var_symbol(s, name, type, -1);
 }
 
-int lookup_symbol(struct Symbol* s, const char* name, SymType type) {
+struct Symbol* insert_label_symbol(struct Symbol* s, const char* name, char* label_start, char* label_end) {
+    if (strcmp("@inner", name) != 0) { // Check duplicates only for labelled conds
+        struct Symbol* curr = s;
+        while (curr) {
+            if (strcmp(curr->name, name) == 0 && curr->type == TYPE_LABEL) {
+                // Error, sym already exists!
+                fprintf(stderr, "Error: Duplicate name '%s'\n", name);
+                exit(NAME_SCOPE_ERROR);
+            }
+            curr = curr->next;
+        }
+    }
+    struct Symbol* new_sym = malloc(sizeof(struct Symbol));
+    new_sym->name = strdup(name);
+    new_sym->type = TYPE_LABEL;
+    new_sym->offset = -1;
+    new_sym->label_start = label_start;
+    new_sym->label_end = label_end;
+    new_sym->next = s;
+    return new_sym;
+}
+
+struct Symbol* lookup_symbol(struct Symbol* s, const char* name, SymType type) {
     struct Symbol* curr = s;
     while (curr) {
-        if (strcmp(curr->name, name) == 0 && curr->type == type) return curr->offset;
+        if (strcmp(curr->name, name) == 0 && curr->type == type) return curr;
         curr = curr->next;
     }
     
     fprintf(stderr, "Error: Symbol with name '%s' not found in current scope\n", name);
     exit(NAME_SCOPE_ERROR);    
-    return 0;
+    return NULL;
 }
 
 int lookup_offset(struct Symbol* s, const char* name) {
-    return lookup_symbol(s, name, TYPE_VAR);
+    return lookup_symbol(s, name, TYPE_VAR)->offset;
+}
+
+const char* lookup_label_start(struct Symbol* s, const char* name) {
+    return lookup_symbol(s, name, TYPE_LABEL)->label_start;
+}
+
+const char* lookup_label_end(struct Symbol* s, const char* name) {
+    return lookup_symbol(s, name, TYPE_LABEL)->label_end;
+}
+
+char* new_label() {
+    static int l_cnt = 0;
+    char buf[32];
+    snprintf(buf, sizeof(buf), ".L_cond_%d", l_cnt++);
+    return strdup(buf);
 }
 
 // --------- End symbol table functions ---------
@@ -87,6 +124,11 @@ const char* reg8b_names[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b", "%al"
 @attributes { int stack_offset; struct Symbol* st_in; struct Symbol* st_syn; } Pars 
 @attributes { struct Symbol* st_in; struct Symbol* st_syn; int stack_size_in; int stack_size_syn; } Stats Stat
 @attributes { struct Symbol* st_in; int stack_size_in; int stack_size_syn; } GuardedList Conds Guarded
+
+@attributes { struct Symbol* st_in; struct Symbol* st_syn; char* l_start; char* l_end; } CondHead
+@attributes { char* l_end; } DummyEndCond
+@attributes { char* l_next; } DummyEndGuarded
+@attributes { struct Symbol* st_in; const char* target; } BocCall
 
 @attributes { struct Symbol* st_in; } Args 
 @attributes { struct Symbol* st_in; int offset; int is_array; treenode* base_tree; treenode* index_tree;} Lexpr
@@ -236,18 +278,36 @@ Stat: RETURN Expr
         @}     
     ;
 
-Conds: COND GuardedList END
-        @{  
-            @i @GuardedList.st_in@ = @Conds.st_in@; 
+Conds: CondHead GuardedList END DummyEndCond
+        @{
+            @i @CondHead.st_in@ = @Conds.st_in@;
+            @i @GuardedList.st_in@ = @CondHead.st_syn@;
             @i @GuardedList.stack_size_in@ = @Conds.stack_size_in@;
             @i @Conds.stack_size_syn@ = @GuardedList.stack_size_syn@;
+            @i @DummyEndCond.l_end@ = @CondHead.l_end@;
         @}
-    | ID ':' COND GuardedList END     
-        @{  
-            @i @GuardedList.st_in@ = insert_symbol(@Conds.st_in@, @ID.name@, TYPE_LABEL); 
-            @i @GuardedList.stack_size_in@ = @Conds.stack_size_in@;
-            @i @Conds.stack_size_syn@ = @GuardedList.stack_size_syn@;
-        @}    
+    ;
+
+CondHead: COND
+        @{
+            @i @CondHead.l_start@ = new_label();
+            @i @CondHead.l_end@ = new_label();
+            @i @CondHead.st_syn@ = insert_label_symbol(@CondHead.st_in@, "@inner", @CondHead.l_start@, @CondHead.l_end@);
+            @codegen { printf("%s:\n", @CondHead.l_start@); }
+        @}
+    | ID ':' COND
+        @{
+            @i @CondHead.l_start@ = new_label();
+            @i @CondHead.l_end@ = new_label();
+            @i @CondHead.st_syn@ = insert_label_symbol(
+                                    insert_label_symbol(@CondHead.st_in@, "@inner", @CondHead.l_start@, @CondHead.l_end@),
+                                    @ID.name@, @CondHead.l_start@, @CondHead.l_end@);
+            @codegen { printf("%s:\n", @CondHead.l_start@); }
+        @}
+    ;
+
+DummyEndCond: /* Empty */
+        @{ @codegen { printf("%s:\n", @DummyEndCond.l_end@); }@}
     ;
 
 GuardedList: /* Can also be empty -> unchanged*/
@@ -262,38 +322,56 @@ GuardedList: /* Can also be empty -> unchanged*/
         @}    
     ;
 
-Guarded: ARROW Stats BOC    
+Guarded: ARROW Stats BocCall DummyEndGuarded    
         @{ 
             @i @Stats.st_in@ = @Guarded.st_in@; 
+            @i @BocCall.st_in@ = @Guarded.st_in@;
             @i @Stats.stack_size_in@ = @Guarded.stack_size_in@;
             @i @Guarded.stack_size_syn@ = @Stats.stack_size_syn@;
+            @i @DummyEndGuarded.l_next@ = new_label();
         @}   
-    | Expr ARROW Stats BOC  
+    | Expr ARROW Stats BocCall DummyEndGuarded  
         @{ 
-            @i @Stats.st_in@ = @Guarded.st_in@; 
             @i @Expr.st_in@ = @Guarded.st_in@; 
-            @i @Stats.stack_size_in@ = @Guarded.stack_size_in@;
-            @i @Guarded.stack_size_syn@ = @Stats.stack_size_syn@;            
-        @}
-    | ARROW Stats BOC ID Dummy
-        @{  
             @i @Stats.st_in@ = @Guarded.st_in@; 
-            @m Dummy.res ; lookup_symbol(@Guarded.st_in@, @ID.name@, TYPE_LABEL);
+            @i @BocCall.st_in@ = @Guarded.st_in@;
             @i @Stats.stack_size_in@ = @Guarded.stack_size_in@;
             @i @Guarded.stack_size_syn@ = @Stats.stack_size_syn@;            
-        @}   
+            @i @DummyEndGuarded.l_next@ = new_label();
 
-    | Expr ARROW Stats BOC ID Dummy
-        @{ 
-            @i @Expr.st_in@ = @Guarded.st_in@; 
-            @i @Stats.st_in@ = @Guarded.st_in@; 
-            @m Dummy.res ; lookup_symbol(@Guarded.st_in@, @ID.name@, TYPE_LABEL);
-            @i @Stats.stack_size_in@ = @Guarded.stack_size_in@;
-            @i @Guarded.stack_size_syn@ = @Stats.stack_size_syn@;            
-        @}    
+            @codegen {
+                invoke_burm(@Expr.tree@);
+                printf("\ttestq $1, %%rax\n"); // Test bit 1 (even/odd)
+                printf("\tjz %s\n", @DummyEndGuarded.l_next@); // zero flag -> even result
+            }
+        @}
     ;
 
-BOC: BREAK | CONTINUE ;
+DummyEndGuarded: /* Empty */
+        @{ @codegen { printf("%s:\n", @DummyEndGuarded.l_next@); }@}
+    ;    
+
+BocCall: BREAK
+        @{  // This works because the first @inner that is encountered will be returned
+            @i @BocCall.target@ = lookup_label_end(@BocCall.st_in@, "@inner");
+            @codegen { printf("\tjmp %s\n", @BocCall.target@); }
+        @}
+    | CONTINUE
+        @{  // This works because the first @inner that is encountered will be returned
+            @i @BocCall.target@ = lookup_label_start(@BocCall.st_in@, "@inner");
+            @codegen { printf("\tjmp %s\n", @BocCall.target@); }
+        @}
+    | BREAK ID
+        @{
+            @i @BocCall.target@ = lookup_label_end(@BocCall.st_in@, @ID.name@);
+            @codegen { printf("\tjmp %s\n", @BocCall.target@); }
+        @}
+    | CONTINUE ID
+        @{
+            @i @BocCall.target@ = lookup_label_start(@BocCall.st_in@, @ID.name@);
+            @codegen { printf("\tjmp %s\n", @BocCall.target@); }
+        @}
+    ;
 
 Lexpr: ID        /* Writing variable */
         @{
@@ -440,7 +518,7 @@ treenode *create_node(NodeType ntype, treenode *left, treenode *right)
 {
   treenode *newNode = malloc(sizeof(treenode));
 
-  if (newNode == NULL) { printf("Out of memory.\n"); exit(4);}
+  if (newNode == NULL) { printf("Out of memory.\n"); exit(TECHNICAL_ERROR);}
 
   newNode->type = ntype;
   newNode->kids[0] = left;
