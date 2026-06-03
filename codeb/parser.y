@@ -6,7 +6,7 @@
 
 #define PARSER_ERROR 2
 #define NAME_SCOPE_ERROR 3
-#define TECHNICAL_ERROR 4
+#define TECHNICAL_ERROR 3
 
 extern int yylex();
 int yyerror(const char *s);

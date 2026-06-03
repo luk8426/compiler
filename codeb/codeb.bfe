@@ -15,7 +15,7 @@ int new_reg() {
 	int this_idx = first_free_reg;
 	if (this_idx >= MAX_REGS) {
 		fprintf(stderr, "Error: Out of registers! Expression too complex.\n");
-    	exit(4); // Check for the correct error code here
+    	exit(3);
 	}
 	first_free_reg++;
 	return this_idx;
