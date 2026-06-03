@@ -299,11 +299,11 @@ Lexpr: ID        /* Writing variable */
             @i @Lexpr.is_array@ = 0;
             @i @Lexpr.index_tree@ = NULL;
         @} 
-    | Term '[' Expr ']' /* writing to array */
+    | Term '[' Expr ']' /* writing to array */ // @i @Lexpr.offset@ = lookup_offset(@Lexpr.st_in@, @ID.name@);
         @{
             @i @Term.st_in@ = @Lexpr.st_in@;
             @i @Expr.st_in@ = @Lexpr.st_in@;
-            @i @Lexpr.offset@ = lookup_offset(@Lexpr.st_in@, @ID.name@);
+            @i @Lexpr.offset@ = -8;
             @i @Lexpr.is_array@ = 1;
             @i @Lexpr.index_tree@ = @Expr.tree@;
         @}      

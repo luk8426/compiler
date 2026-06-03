@@ -17,7 +17,7 @@ int new_reg() {
 		fprintf(stderr, "Error: Out of registers! Expression too complex.\n");
     	exit(4); // Check for the correct error code here
 	}
-	last_free_reg++;
+	first_free_reg++;
 	return this_idx;
 }
 
@@ -35,7 +35,7 @@ expr: 	reg						# 0 #	{if (kids[0]->reg_idx != 7) {printf("\tmovq %s, %%rax\n", 
 expr:	num						# 0 #	{printf("\tmovq $%d, %%rax\n", kids[0]->val);};
 
 num:    NODE_NUM		  	  	# 0 #	
-reg:    NODE_VAR			  	# 0 # 	{bnode->reg_idx = new_reg(); printf("\tmovq %d(%%rbp), %s\n", bnode->offset, reg_names[bnode->reg_idx]);};
+reg:    NODE_VAR			  	# 0 # 	{bnode->reg_idx = new_reg(); printf("\tmovq %d(%%rbp), %s\n", bnode->stack_offset, reg_names[bnode->reg_idx]);};
 
 num:	NODE_ADD(num,num)	  	# 0 # 	{bnode->val=kids[0]->val + kids[1]->val;};
 reg:	NODE_ADD(reg,num)     	# 1 # 	{bnode->reg_idx=kids[0]->reg_idx; printf("\taddq $%d, %s\n", kids[1]->val, reg_names[kids[0]->reg_idx]);};
