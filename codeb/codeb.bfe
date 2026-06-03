@@ -70,9 +70,9 @@ reg:	NODE_EQ(reg, num)		# 3 #	{bnode->reg_idx=kids[0]->reg_idx; printf("\tcmpq $
 reg:	NODE_EQ(num, reg)		# 3 #	{bnode->reg_idx=kids[1]->reg_idx; printf("\tcmpq $%d, %s\n", kids[0]->val, reg_names[kids[1]->reg_idx]);printf("\tsete %s\n", reg8b_names[kids[1]->reg_idx]); printf("\tmovzbq %s, %s\n", reg8b_names[kids[1]->reg_idx], reg_names[kids[1]->reg_idx]);};
 reg:	NODE_EQ(reg, reg)		# 3 #	{bnode->reg_idx=kids[0]->reg_idx; printf("\tcmpq %s, %s\n", reg_names[kids[1]->reg_idx], reg_names[kids[0]->reg_idx]);printf("\tsete %s\n", reg8b_names[kids[0]->reg_idx]); printf("\tmovzbq %s, %s\n", reg8b_names[kids[0]->reg_idx], reg_names[kids[0]->reg_idx]);free_reg();};
 
-reg:	NODE_ARRAY(num, num)  	# 0 # 	{bnode->val=kids[0]->val + 8*kids[1]->val;};
-reg:	NODE_ARRAY(reg, num)  	# 2 # 	{bnode->reg_idx=kids[0]->reg_idx; printf("\tmovq (%s,$%d,8), %s\n", reg_names[kids[0]->reg_idx], kids[1]->val, reg_names[kids[0]->reg_idx]);};
-reg:	NODE_ARRAY(num, reg)  	# 2 # 	{bnode->reg_idx=kids[1]->reg_idx; printf("\tmovq ($%d,%s,8), %s\n", kids[0]->val, reg_names[kids[1]->reg_idx], reg_names[kids[1]->reg_idx]);};
+reg:	NODE_ARRAY(num, num)  	# 0 # 	{bnode->reg_idx = new_reg(); printf("\tmovq %d, %s\n", kids[0]->val + 8 * kids[1]->val, reg_names[bnode->reg_idx]);};
+reg:	NODE_ARRAY(reg, num)  	# 2 # 	{bnode->reg_idx=kids[0]->reg_idx; printf("\tmovq %d(%s), %s\n", kids[1]->val * 8, reg_names[kids[0]->reg_idx], reg_names[kids[0]->reg_idx]);};
+reg:	NODE_ARRAY(num, reg)  	# 2 # 	{bnode->reg_idx=kids[1]->reg_idx; printf("\tmovq %d(,%s,8), %s\n", kids[0]->val, reg_names[kids[1]->reg_idx], reg_names[kids[1]->reg_idx]);};
 reg:	NODE_ARRAY(reg, reg)  	# 2 # 	{bnode->reg_idx=kids[0]->reg_idx; printf("\tmovq (%s,%s,8), %s\n", reg_names[kids[0]->reg_idx], reg_names[kids[1]->reg_idx], reg_names[kids[0]->reg_idx]);free_reg();};
 
 
