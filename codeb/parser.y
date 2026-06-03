@@ -70,7 +70,7 @@ int lookup_offset(struct Symbol* s, const char* name) {
 
 // --------- End symbol table functions ---------
 
-const char* reg_names[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%r10", "%rax", "%r11"};
+const char* reg_names[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%rax", "%r10", "%r11"};
 const char* reg8b_names[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b", "%al", "%r10b", "%r11b"};
 
 %}
@@ -89,7 +89,7 @@ const char* reg8b_names[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b", "%al"
 @attributes { struct Symbol* st_in; int stack_size_in; int stack_size_syn; } GuardedList Conds Guarded
 
 @attributes { struct Symbol* st_in; } Args 
-@attributes { struct Symbol* st_in; int offset; int is_array; treenode* index_tree;} Lexpr
+@attributes { struct Symbol* st_in; int offset; int is_array; treenode* base_tree; treenode* index_tree;} Lexpr
 
 @attributes { treenode *tree; struct Symbol* st_in;} Expr Term
 
@@ -216,9 +216,11 @@ Stat: RETURN Expr
                 if (@Lexpr.is_array@ == 0) { // Direct write
                     printf("\tmovq %%rax, %d(%%rbp)\n", @Lexpr.offset@);
                 } else { // Solution for expr must be stored somewhere to calculate the address in rax
-                    printf("\tmovq %%rax, %%r11\n");
+                    printf("\tmovq %%rax, %%r11\n"); // value
+                    invoke_burm(@Lexpr.base_tree@);
+                    printf("\tmovq %%rax, %%r10\n"); // base address
                     invoke_burm(@Lexpr.index_tree@); // index is now in %rax
-                    printf("\tleaq %d(%%rbp,%%rax,8), %%rax\n", @Lexpr.offset@); // calc abs address
+                    printf("\tleaq (%%r10,%%rax,8), %%rax\n");
                     printf("\tmovq %%r11, (%%rax)\n"); // store result of expr to address
                 }
             }
@@ -295,17 +297,19 @@ BOC: BREAK | CONTINUE ;
 
 Lexpr: ID        /* Writing variable */
         @{
-            @i @Lexpr.offset@ = lookup_offset(@Lexpr.st_in@, @ID.name@);
             @i @Lexpr.is_array@ = 0;
+            @i @Lexpr.offset@ = lookup_offset(@Lexpr.st_in@, @ID.name@);
+            @i @Lexpr.base_tree@ = NULL;
             @i @Lexpr.index_tree@ = NULL;
         @} 
-    | Term '[' Expr ']' /* writing to array */ // @i @Lexpr.offset@ = lookup_offset(@Lexpr.st_in@, @ID.name@);
+    | Term '[' Expr ']' /* writing to array */
         @{
             @i @Term.st_in@ = @Lexpr.st_in@;
             @i @Expr.st_in@ = @Lexpr.st_in@;
-            @i @Lexpr.offset@ = -8;
-            @i @Lexpr.is_array@ = 1;
+            @i @Lexpr.offset@ = 0;
+            @i @Lexpr.base_tree@ = @Term.tree@;
             @i @Lexpr.index_tree@ = @Expr.tree@;
+            @i @Lexpr.is_array@ = 1;
         @}      
     ;
 

@@ -5,7 +5,7 @@
 
 #include "codeb.h"
 
-#define MAX_REGS 8 // Do not use %r11 
+#define MAX_REGS 7 // Do not use %r11 and %r10
 
 extern const char* reg_names[];
 extern const char* reg8b_names[];
@@ -31,7 +31,7 @@ void free_reg() { if(first_free_reg>0) first_free_reg--; else fprintf(stderr, "E
 
 %%
 
-expr: 	reg						# 0 #	{if (kids[0]->reg_idx != 7) {printf("\tmovq %s, %%rax\n", reg_names[kids[0]->reg_idx]);}free_reg();};
+expr: 	reg						# 0 #	{if (kids[0]->reg_idx != 6) {printf("\tmovq %s, %%rax\n", reg_names[kids[0]->reg_idx]);}free_reg();};
 expr:	num						# 0 #	{printf("\tmovq $%d, %%rax\n", kids[0]->val);};
 
 num:    NODE_NUM		  	  	# 0 #	
