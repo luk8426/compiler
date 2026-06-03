@@ -121,7 +121,7 @@ const char* reg8b_names[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b", "%al"
 @attributes { long val; } NUM
 @attributes { char* name; } ID
 
-@attributes { int stack_offset; struct Symbol* st_in; struct Symbol* st_syn; } Pars 
+@attributes { int stack_offset_in; int stack_offset_syn; struct Symbol* st_in; struct Symbol* st_syn; } Pars 
 @attributes { struct Symbol* st_in; struct Symbol* st_syn; int stack_size_in; int stack_size_syn; } Stats Stat
 @attributes { struct Symbol* st_in; int stack_size_in; int stack_size_syn; } GuardedList Conds Guarded
 
@@ -158,10 +158,10 @@ Program: /* Can also be empty bc {} says 0 or multiple times  */
 
 Funcdef: ID '(' Pars ')' Stats END Dummy /* Function definition */
         @{
-            @i @Pars.stack_offset@ = -8;
+            @i @Pars.stack_offset_in@ = -8;
             @i @Pars.st_in@ = create_st();
             @i @Stats.st_in@ = @Pars.st_syn@;
-            @i @Stats.stack_size_in@ = @Pars.stack_offset@;
+            @i @Stats.stack_size_in@ = @Pars.stack_offset_syn@;
 
             @m Dummy.res ; {
                 printf(".global %s\n", @ID.name@);
@@ -189,14 +189,21 @@ Funcdef: ID '(' Pars ')' Stats END Dummy /* Function definition */
     ;
 
 Pars: /* Can also be empty */
-        @{  @i @Pars.st_syn@ = @Pars.st_in@; @} // unchanged if empty
+        @{  
+            @i @Pars.st_syn@ = @Pars.st_in@; 
+            @i @Pars.stack_offset_syn@ = @Pars.stack_offset_in@ + 8;
+        @} 
     | ID     /* Parameter definition */
-        @{ @i @Pars.st_syn@ = insert_var_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR, @Pars.stack_offset@); @}
+        @{ 
+            @i @Pars.st_syn@ = insert_var_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR, @Pars.stack_offset_in@); 
+            @i @Pars.stack_offset_syn@ = @Pars.stack_offset_in@;
+        @}
     | ID ',' Pars
         @{  
-            @i @Pars.1.stack_offset@ = @Pars.0.stack_offset@ - 8;
+            @i @Pars.1.stack_offset_in@ = @Pars.0.stack_offset_in@ - 8;
+            @i @Pars.0.stack_offset_syn@ = @Pars.1.stack_offset_syn@;
             @i @Pars.1.st_in@ = @Pars.0.st_in@;
-            @i @Pars.0.st_syn@ = insert_var_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR, @Pars.0.stack_offset@);
+            @i @Pars.0.st_syn@ = insert_var_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR, @Pars.0.stack_offset_in@);
         @}
     ;
 
