@@ -1,14 +1,14 @@
-all: codea
+all: codeb
 
 clean:
         rm -f *.o
         rm -f lex.yy.c
-        rm -f codea.brg codea.c
-        rm -f codea
+        rm -f codeb.brg codeb.c
+        rm -f codeb
         rm -f oxout*
 
-codea: oxout.tab.o lex.yy.o codea.o
-        cc -o codea y.tab.o lex.yy.o codea.o -lfl
+codeb: oxout.tab.o lex.yy.o codeb.o
+        cc -o codeb y.tab.o lex.yy.o codeb.o -lfl
 
 oxout.tab.c oxout.tab.h: oxout.y
         bison -d oxout.y
@@ -22,17 +22,17 @@ oxout.l: parser.y scanner.l
 lex.yy.c: oxout.l
         flex oxout.l
 
-oxout.tab.o: oxout.tab.c codea.h
+oxout.tab.o: oxout.tab.c codeb.h
         cc -c oxout.tab.c
 
-yy.lex.o: lex.yy.c oxout.tab.h codea.h
+yy.lex.o: lex.yy.c oxout.tab.h codeb.h
         cc -c lex.yy.c
 
-codea.brg: codea.bfe
-        bfe codea.bfe >codea.brg
+codeb.brg: codeb.bfe
+        bfe codeb.bfe >codeb.brg
 
-codea.c: codea.brg
-        iburg codea.brg >codea.c
+codeb.c: codeb.brg
+        iburg codeb.brg >codeb.c
 
-codea.o: codea.c codea.h
-        gcc -c codea.c
+codeb.o: codeb.c codeb.h
+        gcc -c codeb.c

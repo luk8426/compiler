@@ -6,6 +6,7 @@
 
 #define PARSER_ERROR 2
 #define NAME_SCOPE_ERROR 3
+#define TECHNICAL_ERROR 4
 
 extern int yylex();
 int yyerror(const char *s);
@@ -16,7 +17,9 @@ typedef enum { TYPE_VAR, TYPE_LABEL } SymType;
 struct Symbol {
     char *name;
     SymType type;
-    int index; // To identify the location/register
+    int offset; 
+    // char *label_start;  // Für Labels (continue) TBD
+    // char *label_end;    // Für Labels (break) TBD
     struct Symbol *next;
 };
 
@@ -24,7 +27,7 @@ struct Symbol* create_st() {
     return NULL;
 }
 
-struct Symbol* insert_param_symbol(struct Symbol* s, const char* name, SymType type, int index) {
+struct Symbol* insert_var_symbol(struct Symbol* s, const char* name, SymType type, int offset) {
     struct Symbol* curr = s;
     while (curr) {
         if (strcmp(curr->name, name) == 0) {
@@ -38,19 +41,21 @@ struct Symbol* insert_param_symbol(struct Symbol* s, const char* name, SymType t
     struct Symbol* new_sym = malloc(sizeof(struct Symbol));
     new_sym->name = strdup(name);
     new_sym->type = type;
-    new_sym->index = index;
+    new_sym->offset = offset;
+    // new_sym->label_start = NULL;
+    // new_sym->label_end = NULL;    
     new_sym->next = s;
     return new_sym;
 }
 
 struct Symbol* insert_symbol(struct Symbol* s, const char* name, SymType type) {
-    return insert_param_symbol(s, name, type, -1);
+    return insert_var_symbol(s, name, type, -1);
 }
 
 int lookup_symbol(struct Symbol* s, const char* name, SymType type) {
     struct Symbol* curr = s;
     while (curr) {
-        if (strcmp(curr->name, name) == 0 && curr->type == type) return curr->index;
+        if (strcmp(curr->name, name) == 0 && curr->type == type) return curr->offset;
         curr = curr->next;
     }
     
@@ -59,13 +64,13 @@ int lookup_symbol(struct Symbol* s, const char* name, SymType type) {
     return 0;
 }
 
-int lookup_index(struct Symbol* s, const char* name) {
+int lookup_offset(struct Symbol* s, const char* name) {
     return lookup_symbol(s, name, TYPE_VAR);
 }
 
 // --------- End symbol table functions ---------
 
-const char* reg_names[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%rax", "%r10", "%r11"};
+const char* reg_names[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%r10", "%rax", "%r11"};
 const char* reg8b_names[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b", "%al", "%r10b", "%r11b"};
 
 %}
@@ -79,10 +84,12 @@ const char* reg8b_names[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b", "%al"
 @attributes { long val; } NUM
 @attributes { char* name; } ID
 
-@attributes { int reg_idx; struct Symbol* st_in; struct Symbol* st_syn; } Pars
-@attributes { struct Symbol* st_in; struct Symbol* st_syn; } Stats Stat
+@attributes { int stack_offset; struct Symbol* st_in; struct Symbol* st_syn; } Pars 
+@attributes { struct Symbol* st_in; struct Symbol* st_syn; int stack_size_in; int stack_size_syn; } Stats Stat
+@attributes { struct Symbol* st_in; int stack_size_in; int stack_size_syn; } GuardedList Conds Guarded
 
-@attributes { struct Symbol* st_in; } Args GuardedList Conds Lexpr Guarded
+@attributes { struct Symbol* st_in; } Args 
+@attributes { struct Symbol* st_in; int offset; int is_array; treenode* index_tree;} Lexpr
 
 @attributes { treenode *tree; struct Symbol* st_in;} Expr Term
 
@@ -90,8 +97,7 @@ const char* reg8b_names[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b", "%al"
 @attributes { int count; } NotList
 @attributes { NodeType op; } LEM
 
-@attributes {int res; } 
-    Dummy
+@attributes {int res; } Dummy
     
 @traversal @preorder codegen
 
@@ -110,89 +116,169 @@ Program: /* Can also be empty bc {} says 0 or multiple times  */
 
 Funcdef: ID '(' Pars ')' Stats END Dummy /* Function definition */
         @{
-            @i @Pars.reg_idx@ = 0;
+            @i @Pars.stack_offset@ = -8;
             @i @Pars.st_in@ = create_st();
             @i @Stats.st_in@ = @Pars.st_syn@;
-            @m Dummy.res ; {printf(".global %s\n", @ID.name@);printf("%s:\n", @ID.name@);};
+            @i @Stats.stack_size_in@ = @Pars.stack_offset@;
+
+            @m Dummy.res ; {
+                printf(".global %s\n", @ID.name@);
+                printf("%s:\n", @ID.name@);
+                printf("\tpushq %%rbp\n");
+                printf("\tmovq %%rsp, %%rbp\n");
+                
+                // Reserve some space on the stack for local vars and params
+                printf("\tsubq $256, %%rsp\n");
+                struct Symbol* curr = @Pars.st_syn@;
+                while (curr) {
+                    if (curr->type == TYPE_VAR && curr->offset < 0) {
+                        int reg_idx = (-curr->offset / 8) - 1;                        
+                        if (reg_idx < 6) {
+                            printf("\tmovq %s, %d(%%rbp)\n", reg_names[reg_idx], curr->offset);
+                        } else {
+                            fprintf(stderr, "Error: More then 6 parameters in function %s", @ID.name@);
+                            exit(TECHNICAL_ERROR);
+                        }
+                    }
+                    curr = curr->next;
+                }
+            };
         @}
     ;
 
 Pars: /* Can also be empty */
         @{  @i @Pars.st_syn@ = @Pars.st_in@; @} // unchanged if empty
     | ID     /* Parameter definition */
-        @{  @i @Pars.st_syn@ = insert_param_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR, @Pars.reg_idx@); @}
+        @{ @i @Pars.st_syn@ = insert_var_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR, @Pars.stack_offset@); @}
     | ID ',' Pars
         @{  
-            @i @Pars.1.reg_idx@ = @Pars.0.reg_idx@ + 1;
+            @i @Pars.1.stack_offset@ = @Pars.0.stack_offset@ - 8;
             @i @Pars.1.st_in@ = @Pars.0.st_in@;
-            @i @Pars.0.st_syn@ = insert_param_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR, @Pars.0.reg_idx@);
+            @i @Pars.0.st_syn@ = insert_var_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR, @Pars.0.stack_offset@);
         @}
     ;
 
-Stats: /* Can also be empty */
-        @{  @i @Stats.st_syn@ = @Stats.st_in@; @} // unchanged if empty
+Stats: /* Can also be empty -> unchanged*/
+        @{  
+            @i @Stats.st_syn@ = @Stats.st_in@;
+            @i @Stats.stack_size_syn@ = @Stats.stack_size_in@;
+        @}
     | Stats Stat ';'
         @{
             @i @Stats.1.st_in@ = @Stats.0.st_in@;
+            @i @Stats.1.stack_size_in@ = @Stats.0.stack_size_in@;
+
             @i @Stat.st_in@ = @Stats.1.st_syn@;
+            @i @Stat.stack_size_in@ = @Stats.1.stack_size_syn@;
+
             @i @Stats.0.st_syn@ = @Stat.st_syn@;
+            @i @Stats.0.stack_size_syn@ = @Stat.stack_size_syn@;            
         @}
     ;
 
 Stat: RETURN Expr
         @{
-            @codegen invoke_burm(@Expr.tree@);
             @i @Stat.st_syn@ = @Stat.st_in@;
             @i @Expr.st_in@ = @Stat.st_in@;
+            @i @Stat.stack_size_syn@ = @Stat.stack_size_in@;
+            @codegen {
+                invoke_burm(@Expr.tree@);
+                printf("\tmovq %%rbp, %%rsp\n");
+                printf("\tpopq %%rbp\n");
+                printf("\tret\n");
+            }
         @}
     | Conds
         @{
             @i @Stat.st_syn@ = @Stat.st_in@;
             @i @Conds.st_in@ = @Stat.st_in@;
+            @i @Conds.stack_size_in@ = @Stat.stack_size_in@;
+            @i @Stat.stack_size_syn@ = @Conds.stack_size_syn@;
         @}    
     | VAR ID ASSIGN Expr /* variable definition */
         @{
-            @i @Stat.st_syn@ = insert_symbol(@Stat.st_in@, @ID.name@, TYPE_VAR);
+            @i @Stat.stack_size_syn@ = @Stat.stack_size_in@ - 8;
+            @i @Stat.st_syn@ = insert_var_symbol(@Stat.st_in@, @ID.name@, TYPE_VAR, @Stat.stack_size_syn@);
             @i @Expr.st_in@ = @Stat.st_in@;
-        @}    
+            @codegen {
+                invoke_burm(@Expr.tree@);
+                printf("\tmovq %%rax, %d(%%rbp)\n", lookup_offset(@Stat.st_syn@, @ID.name@));
+            }
+        @}   
     | Lexpr ASSIGN Expr  /* Assignment */
         @{
             @i @Stat.st_syn@ = @Stat.st_in@;
             @i @Lexpr.st_in@ = @Stat.st_in@;
             @i @Expr.st_in@ = @Stat.st_in@;
-        @}    
+            @i @Stat.stack_size_syn@ = @Stat.stack_size_in@;
+            @codegen {
+                invoke_burm(@Expr.tree@);                
+                if (@Lexpr.is_array@ == 0) { // Direct write
+                    printf("\tmovq %%rax, %d(%%rbp)\n", @Lexpr.offset@);
+                } else { // Solution for expr must be stored somewhere to calculate the address in rax
+                    printf("\tmovq %%rax, %%r11\n");
+                    invoke_burm(@Lexpr.index_tree@); // index is now in %rax
+                    printf("\tleaq %d(%%rbp,%%rax,8), %%rax\n", @Lexpr.offset@); // calc abs address
+                    printf("\tmovq %%r11, (%%rax)\n"); // store result of expr to address
+                }
+            }
+        @}      
     | Term
         @{
             @i @Stat.st_syn@ = @Stat.st_in@;
             @i @Term.st_in@ = @Stat.st_in@;
-        @}    
+            @i @Stat.stack_size_syn@ = @Stat.stack_size_in@;
+            @codegen {
+                invoke_burm(@Term.tree@); // Evalute and discard
+            }
+        @}     
     ;
 
 Conds: COND GuardedList END
-        @{  @i @GuardedList.st_in@ = @Conds.st_in@; @}
+        @{  
+            @i @GuardedList.st_in@ = @Conds.st_in@; 
+            @i @GuardedList.stack_size_in@ = @Conds.stack_size_in@;
+            @i @Conds.stack_size_syn@ = @GuardedList.stack_size_syn@;
+        @}
     | ID ':' COND GuardedList END     
-        @{  @i @GuardedList.st_in@ = insert_symbol(@Conds.st_in@, @ID.name@, TYPE_LABEL); @}    
+        @{  
+            @i @GuardedList.st_in@ = insert_symbol(@Conds.st_in@, @ID.name@, TYPE_LABEL); 
+            @i @GuardedList.stack_size_in@ = @Conds.stack_size_in@;
+            @i @Conds.stack_size_syn@ = @GuardedList.stack_size_syn@;
+        @}    
     ;
 
-GuardedList: /* leer */
+GuardedList: /* Can also be empty -> unchanged*/
+        @{  @i @GuardedList.stack_size_syn@ = @GuardedList.stack_size_in@; @}
     | GuardedList Guarded ';'
         @{
             @i @GuardedList.1.st_in@ = @GuardedList.0.st_in@;
             @i @Guarded.st_in@ = @GuardedList.0.st_in@;
+            @i @GuardedList.1.stack_size_in@ = @GuardedList.0.stack_size_in@;
+            @i @Guarded.stack_size_in@ = @GuardedList.1.stack_size_in@;
+            @i @GuardedList.0.stack_size_syn@ = @Guarded.stack_size_syn@;
         @}    
     ;
 
 Guarded: ARROW Stats BOC    
-        @{ @i @Stats.st_in@ = @Guarded.st_in@; @}   
+        @{ 
+            @i @Stats.st_in@ = @Guarded.st_in@; 
+            @i @Stats.stack_size_in@ = @Guarded.stack_size_in@;
+            @i @Guarded.stack_size_syn@ = @Stats.stack_size_syn@;
+        @}   
     | Expr ARROW Stats BOC  
         @{ 
             @i @Stats.st_in@ = @Guarded.st_in@; 
             @i @Expr.st_in@ = @Guarded.st_in@; 
+            @i @Stats.stack_size_in@ = @Guarded.stack_size_in@;
+            @i @Guarded.stack_size_syn@ = @Stats.stack_size_syn@;            
         @}
     | ARROW Stats BOC ID Dummy
         @{  
             @i @Stats.st_in@ = @Guarded.st_in@; 
             @m Dummy.res ; lookup_symbol(@Guarded.st_in@, @ID.name@, TYPE_LABEL);
+            @i @Stats.stack_size_in@ = @Guarded.stack_size_in@;
+            @i @Guarded.stack_size_syn@ = @Stats.stack_size_syn@;            
         @}   
 
     | Expr ARROW Stats BOC ID Dummy
@@ -200,18 +286,27 @@ Guarded: ARROW Stats BOC
             @i @Expr.st_in@ = @Guarded.st_in@; 
             @i @Stats.st_in@ = @Guarded.st_in@; 
             @m Dummy.res ; lookup_symbol(@Guarded.st_in@, @ID.name@, TYPE_LABEL);
+            @i @Stats.stack_size_in@ = @Guarded.stack_size_in@;
+            @i @Guarded.stack_size_syn@ = @Stats.stack_size_syn@;            
         @}    
     ;
 
 BOC: BREAK | CONTINUE ;
 
-Lexpr: ID Dummy        /* Writing variable */
-        @{  @m Dummy.res ; lookup_symbol(@Lexpr.st_in@, @ID.name@, TYPE_VAR); @}  
+Lexpr: ID        /* Writing variable */
+        @{
+            @i @Lexpr.offset@ = lookup_offset(@Lexpr.st_in@, @ID.name@);
+            @i @Lexpr.is_array@ = 0;
+            @i @Lexpr.index_tree@ = NULL;
+        @} 
     | Term '[' Expr ']' /* writing to array */
         @{
             @i @Term.st_in@ = @Lexpr.st_in@;
             @i @Expr.st_in@ = @Lexpr.st_in@;
-        @}       
+            @i @Lexpr.offset@ = lookup_offset(@Lexpr.st_in@, @ID.name@);
+            @i @Lexpr.is_array@ = 1;
+            @i @Lexpr.index_tree@ = @Expr.tree@;
+        @}      
     ;
 
 Expr: Term              
@@ -319,7 +414,7 @@ Term: '(' Expr ')'
     | ID Dummy          /* variable usage */
         @{ 
             @m Dummy.res ; lookup_symbol(@Term.st_in@, @ID.name@, TYPE_VAR); 
-            @i @Term.tree@ = create_var_node(lookup_index(@Term.st_in@, @ID.name@));
+            @i @Term.tree@ = create_var_node(lookup_offset(@Term.st_in@, @ID.name@));
         @}         
     | ID '(' Args ')'   /* Function call */  
         @{ 
@@ -346,16 +441,16 @@ treenode *create_node(NodeType ntype, treenode *left, treenode *right)
   newNode->type = ntype;
   newNode->kids[0] = left;
   newNode->kids[1] = right;
-  newNode->reg_idx = -1;
+  newNode->stack_offset = -1;
   newNode->val = 0;
 
   return newNode;
 }
 
-treenode *create_var_node(int idx)
+treenode *create_var_node(int offset)
 {
   treenode *newNode = create_node(NODE_VAR,NULL,NULL);
-  newNode->reg_idx = idx; // -1 if var is no parameter
+  newNode->stack_offset = offset;
   return newNode;
 }
 

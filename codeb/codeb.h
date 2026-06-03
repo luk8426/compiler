@@ -22,6 +22,7 @@ typedef struct s_node {
 	STATEPTR_TYPE	state;
 	int reg_idx;
 	long val;
+	int stack_offset;
 } treenode;
 
 typedef treenode *treenodep;
