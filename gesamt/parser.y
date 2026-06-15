@@ -138,8 +138,6 @@ const char* reg8b_names[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b", "%al"
 @attributes { treenode* tree_in; treenode* tree_syn; struct Symbol* st_in;} AddList MulList AndList
 @attributes { int count; } NotList
 @attributes { NodeType op; } LEM
-
-@attributes {int res; } Dummy
     
 @traversal @preorder codegen
 
@@ -156,14 +154,14 @@ Program: /* Can also be empty bc {} says 0 or multiple times  */
     | Program Funcdef ';' 
     ;
 
-Funcdef: ID '(' Pars ')' Stats END Dummy /* Function definition */
+Funcdef: ID '(' Pars ')' Stats END /* Function definition */
         @{
             @i @Pars.stack_offset_in@ = -8;
             @i @Pars.st_in@ = create_st();
             @i @Stats.st_in@ = @Pars.st_syn@;
             @i @Stats.stack_size_in@ = @Pars.stack_offset_syn@;
 
-            @m Dummy.res ; {
+            @codegen {
                 printf(".global %s\n", @ID.name@);
                 printf("%s:\n", @ID.name@);
                 printf("\tpushq %%rbp\n");
@@ -184,7 +182,7 @@ Funcdef: ID '(' Pars ')' Stats END Dummy /* Function definition */
                     }
                     curr = curr->next;
                 }
-            };
+            }
         @}
     ;
 
@@ -500,9 +498,9 @@ Term: '(' Expr ')'
             @i @Term.tree@ = @Expr.tree@;
         @}
     | NUM   @{ @i @Term.tree@ = create_num_node(@NUM.val@); @}
-    | ID Dummy          /* variable usage */
+    | ID          /* variable usage */
         @{ 
-            @m Dummy.res ; lookup_symbol(@Term.st_in@, @ID.name@, TYPE_VAR); 
+            @codegen {lookup_symbol(@Term.st_in@, @ID.name@, TYPE_VAR); }
             @i @Term.tree@ = create_var_node(lookup_offset(@Term.st_in@, @ID.name@));
         @}         
     | ID '(' Args ')'   /* Function call */  
@@ -516,8 +514,6 @@ Args: /* Empty */
     | Expr              @{ @i @Expr.st_in@ = @Args.st_in@; @}
     | Expr ',' Args     @{ @i @Expr.st_in@ = @Args.0.st_in@; @i @Args.1.st_in@ = @Args.0.st_in@; @}
     ;
-
-Dummy: /* Empty */ ; /* Dummy dependent for lookup_symbol */
 
 %%
 
