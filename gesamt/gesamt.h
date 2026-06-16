@@ -11,7 +11,9 @@ typedef enum {
 	NODE_NOT,
 	NODE_GT,
 	NODE_EQ,
-	NODE_ARRAY 
+	NODE_ARRAY,
+	NODE_CALL,
+	NODE_ARG
 } NodeType;
 
 typedef struct burm_state *STATEPTR_TYPE;
@@ -23,6 +25,7 @@ typedef struct s_node {
 	int reg_idx;
 	long val;
 	int stack_offset;
+	char *func_name;
 } treenode;
 
 typedef treenode *treenodep;

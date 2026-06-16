@@ -130,10 +130,9 @@ const char* reg8b_names[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b", "%al"
 @attributes { char* l_next; } DummyEndGuarded
 @attributes { struct Symbol* st_in; const char* target; } BocCall
 
-@attributes { struct Symbol* st_in; } Args 
 @attributes { struct Symbol* st_in; int offset; int is_array; treenode* base_tree; treenode* index_tree;} Lexpr
 
-@attributes { treenode *tree; struct Symbol* st_in;} Expr Term
+@attributes { treenode *tree; struct Symbol* st_in;} Expr Term Args
 
 @attributes { treenode* tree_in; treenode* tree_syn; struct Symbol* st_in;} AddList MulList AndList
 @attributes { int count; } NotList
@@ -145,6 +144,8 @@ const char* reg8b_names[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b", "%al"
 treenode *create_node(NodeType ntype, treenode *left, treenode *right);
 treenode *create_var_node(int idx);
 treenode *create_num_node(long num);
+treenode *create_call_node(const char* func_name, treenode *tree);
+void function_epilogue();
 extern void invoke_burm(NODEPTR_TYPE root);
 %}
 
@@ -154,7 +155,7 @@ Program: /* Can also be empty bc {} says 0 or multiple times  */
     | Program Funcdef ';' 
     ;
 
-Funcdef: ID '(' Pars ')' Stats END /* Function definition */
+Funcdef: ID '(' Pars ')' Stats FUNC_END /* Function definition */
         @{
             @i @Pars.stack_offset_in@ = -8;
             @i @Pars.st_in@ = create_st();
@@ -186,6 +187,11 @@ Funcdef: ID '(' Pars ')' Stats END /* Function definition */
         @}
     ;
 
+FUNC_END: END
+        @{
+            @codegen { function_epilogue();}
+        @}
+    ;
 Pars: /* Can also be empty */
         @{  
             @i @Pars.st_syn@ = @Pars.st_in@; 
@@ -230,9 +236,7 @@ Stat: RETURN Expr
             @i @Stat.stack_size_syn@ = @Stat.stack_size_in@;
             @codegen {
                 invoke_burm(@Expr.tree@);
-                printf("\tmovq %%rbp, %%rsp\n");
-                printf("\tpopq %%rbp\n");
-                printf("\tret\n");
+                function_epilogue();
             }
         @}
     | Conds
@@ -506,13 +510,23 @@ Term: '(' Expr ')'
     | ID '(' Args ')'   /* Function call */  
         @{ 
             @i @Args.st_in@ = @Term.st_in@; 
-            @i @Term.tree@ = NULL; 
+            @i @Term.tree@ = create_call_node(@ID.name@, @Args.tree@);
         @}
     ;
 
 Args: /* Empty */
-    | Expr              @{ @i @Expr.st_in@ = @Args.st_in@; @}
-    | Expr ',' Args     @{ @i @Expr.st_in@ = @Args.0.st_in@; @i @Args.1.st_in@ = @Args.0.st_in@; @}
+        @{ @i @Args.tree@ = NULL; @}
+    | Expr              
+        @{ 
+            @i @Expr.st_in@ = @Args.st_in@; 
+            @i @Args.tree@ = create_node(NODE_ARG, @Expr.tree@, NULL);
+        @}
+    | Expr ',' Args     
+        @{ 
+            @i @Expr.st_in@ = @Args.0.st_in@; 
+            @i @Args.1.st_in@ = @Args.0.st_in@; 
+            @i @Args.0.tree@ = create_node(NODE_ARG, @Expr.tree@, @Args.1.tree@); 
+        @}
     ;
 
 %%
@@ -528,7 +542,6 @@ treenode *create_node(NodeType ntype, treenode *left, treenode *right)
   newNode->kids[1] = right;
   newNode->stack_offset = -1;
   newNode->val = 0;
-
   return newNode;
 }
 
@@ -539,12 +552,24 @@ treenode *create_var_node(int offset)
   return newNode;
 }
 
+treenode *create_call_node(const char* func_name, treenode *tree)
+{
+  treenode *newNode = create_node(NODE_CALL, tree, NULL);
+  newNode->func_name = strdup(func_name);
+  return newNode;
+}
+
 treenode *create_num_node(long num)
 {
   treenode *newNode = create_node(NODE_NUM,NULL,NULL);
   newNode->val = num;
   return newNode;
 }
+
+void function_epilogue() {
+    printf("\tleave\n"); // LEAVE = mov %rbp, %rsp und pop %rbp.
+    printf("\tret\n");
+};
 
 int yyerror(const char *e){
     printf("Parser error: '%s'...\n",e);
