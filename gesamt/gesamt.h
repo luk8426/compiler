@@ -1,6 +1,9 @@
 #ifndef GESAMT_H_
 #define GESAMT_H_
 
+#define MAX_REGS 7 // Do not use %r11 and %r10
+#define MAX_ARG_REGS 6
+
 typedef enum { 
 	NODE_NUM, 
 	NODE_VAR,

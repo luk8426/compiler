@@ -5,9 +5,6 @@
 
 #include "gesamt.h"
 
-#define MAX_REGS 7 // Do not use %r11 and %r10
-#define MAX_ARG_REGS 6
-
 void invoke_burm(NODEPTR_TYPE root);
 
 extern const char* reg_names[];
@@ -32,26 +29,50 @@ void function_call_asmb(NODEPTR_TYPE bnode){
     for (int i = 0; i < cnt_saved_regs; i++) {
         printf("\tpushq %s\n", reg_names[i]);
     }
-	// Traverse arguments (left to right) and push them on the stack
-  	treenode *curr_arg = bnode->kids[0];
+
+	// Args -> Array (Left to Right)
+	treenode *arg_list[32];
     int arg_count = 0;
+    treenode *curr_arg = bnode->kids[0];
     while (curr_arg != NULL && curr_arg->type == NODE_ARG) {
         if (curr_arg->kids[0] != NULL) {
-            invoke_burm(curr_arg->kids[0]);
-            printf("\tpushq %%rax\n"); // Save this arg to the stack after calculation
-            arg_count++;
+            arg_list[arg_count++] = curr_arg->kids[0];
         }
         curr_arg = curr_arg->kids[1];
-    }	
-	// Put them in the registers in reverse order according to the calling convention
-	for (int i = arg_count - 1; i >= 0; i--) {
-        if (i < MAX_ARG_REGS) {
-            printf("\tpopq %s\n", reg_names[i]);
-        } else {
-			// Push them to the stack?
-		}
     }
-	printf("\tcall %s\n", bnode->func_name);
+
+	// Stack alignment
+	int stack_args = (arg_count > MAX_ARG_REGS) ? (arg_count - MAX_ARG_REGS) : 0;
+    int reg_args = (arg_count > MAX_ARG_REGS) ? MAX_ARG_REGS : arg_count;
+    int padding = 0;
+	if ((cnt_saved_regs + stack_args) % 2 != 0) {
+        printf("\tsubq $8, %%rsp\n"); // 8-byte alignment padding
+        padding = 8;
+    }
+
+	for (int i = arg_count - 1; i >= MAX_ARG_REGS; i--) {
+		invoke_burm(arg_list[i]);
+		printf("\tpushq %%rax\n");
+	}
+
+	// Evaluate arguments (left to right) and push them on the stack
+	for (int i = 0; i < reg_args; i++) {
+        invoke_burm(arg_list[i]);
+        printf("\tpushq %%rax\n");
+    }
+
+	// Args -> registers (reverse order) & fct call
+	for (int i = reg_args - 1; i >= 0; i--) {
+        printf("\tpopq %s\n", reg_names[i]);
+    }
+    printf("\tcall %s\n", bnode->func_name);
+
+	// Stack cleanup (padding & stack arguments)
+	int total_stack_cleanup = (stack_args * 8) + padding;
+    if (total_stack_cleanup > 0) {
+        printf("\taddq $%d, %%rsp\n", total_stack_cleanup);
+    }
+
 	// restore the values from the registers
     for (int i = cnt_saved_regs - 1; i >= 0; i--) {
         printf("\tpopq %s\n", reg_names[i]);

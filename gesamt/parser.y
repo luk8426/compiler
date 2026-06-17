@@ -48,6 +48,14 @@ struct Symbol* insert_var_symbol(struct Symbol* s, const char* name, SymType typ
     return new_sym;
 }
 
+struct Symbol* insert_par_symbol(struct Symbol* s, const char* name, SymType type, int offset) {
+    int param_idx = ((offset/8)*(-1))-1;
+    if(param_idx>=MAX_ARG_REGS){
+        offset = 16 + (param_idx - MAX_ARG_REGS) * 8;
+    }
+    return insert_var_symbol(s, name, TYPE_VAR, offset);
+}
+
 struct Symbol* insert_symbol(struct Symbol* s, const char* name, SymType type) {
     return insert_var_symbol(s, name, type, -1);
 }
@@ -199,7 +207,7 @@ Pars: /* Can also be empty */
         @} 
     | ID     /* Parameter definition */
         @{ 
-            @i @Pars.st_syn@ = insert_var_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR, @Pars.stack_offset_in@); 
+            @i @Pars.st_syn@ = insert_par_symbol(@Pars.st_in@, @ID.name@, TYPE_VAR, @Pars.stack_offset_in@);
             @i @Pars.stack_offset_syn@ = @Pars.stack_offset_in@;
         @}
     | ID ',' Pars
@@ -207,7 +215,7 @@ Pars: /* Can also be empty */
             @i @Pars.1.stack_offset_in@ = @Pars.0.stack_offset_in@ - 8;
             @i @Pars.0.stack_offset_syn@ = @Pars.1.stack_offset_syn@;
             @i @Pars.1.st_in@ = @Pars.0.st_in@;
-            @i @Pars.0.st_syn@ = insert_var_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR, @Pars.0.stack_offset_in@);
+            @i @Pars.0.st_syn@ = insert_par_symbol(@Pars.1.st_syn@, @ID.name@, TYPE_VAR, @Pars.0.stack_offset_in@);
         @}
     ;
 
